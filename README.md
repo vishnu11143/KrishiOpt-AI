@@ -112,7 +112,23 @@ npm run dev
 
 Open **http://localhost:3000** in your browser.
 
+## Deployment on Vercel
+
+KrishiOpt AI is configured for seamless zero-config deployment on Vercel combining the Vite React frontend and the Python Flask backend serverless function:
+
+1. Push this repository to GitHub: `https://github.com/vishnu11143/KrishiOpt-AI`
+2. Go to **[vercel.com/new](https://vercel.com/new)** and import your `KrishiOpt-AI` repository.
+3. Configure **Environment Variables** in the Vercel project settings:
+   - `GEMINI_API_KEY`: Your Google Gemini API Key
+   - `GOOGLE_MAPS_API_KEY`: Your Google Maps API Key
+   - `VITE_GOOGLE_MAPS_API_KEY`: Your Google Maps API Key (optional, for direct client-side loading)
+4. Click **Deploy**. Vercel will:
+   - Build the React Vite frontend into `frontend/dist`
+   - Deploy Python serverless function at `api/index.py`
+   - Automatically route `/api/*` to the Flask backend and `/*` to the React single-page app!
+
 ## Environment Variables
+
 
 KrishiOpt AI integrates with Google Maps and Google Gemini APIs. Core analytics and ML continue to run locally, while external APIs enhance mapping and conversational intelligence.
 

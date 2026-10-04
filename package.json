@@ -1,0 +1,20 @@
+{
+  "name": "krishiopt-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KrishiOpt AI — Intelligent Agricultural Decision & Resource Optimization Platform",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "cd frontend && npm run dev",
+    "start": "python -m backend.app"
+  },
+  "keywords": [
+    "agriculture",
+    "machine-learning",
+    "resource-optimization",
+    "linear-programming",
+    "google-maps",
+    "gemini-ai"
+  ],
+  "author": "Vishnu Koukuntla"
+}

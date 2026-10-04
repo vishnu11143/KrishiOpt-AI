@@ -1,0 +1,9 @@
+Seasonal_Agriculture_Performance_Analysis.ipynb
+research/
+.git/
+.env
+.env*.local
+*.pyc
+__pycache__/
+frontend/node_modules/
+.pytest_cache/
