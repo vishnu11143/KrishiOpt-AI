@@ -1,9 +1,24 @@
-Seasonal_Agriculture_Performance_Analysis.ipynb
+# Ignore notebooks and research
+*.ipynb
 research/
-.git/
+
+# Ignore local env and caches
 .env
 .env*.local
 *.pyc
 __pycache__/
-frontend/node_modules/
 .pytest_cache/
+.vscode/
+.idea/
+
+# Ignore dependencies and artifacts
+node_modules/
+frontend/node_modules/
+.venv/
+venv/
+*.log
+*.tmp
+
+# Exclude unnecessary media/scratch from deployment
+*.webp
+scratch/

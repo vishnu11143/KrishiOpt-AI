@@ -7,8 +7,89 @@ All calculations are derived from the actual CSV, mirroring the original noteboo
 import os
 import pandas as pd
 import numpy as np
-from scipy import stats
+import math
 from functools import lru_cache
+
+# ---------------------------------------------------------------------------
+# Numerical Statistics Utilities (Independent of SciPy for lightweight serverless)
+# ---------------------------------------------------------------------------
+
+def _betacf(a, b, x):
+    MAXIT = 100
+    EPS = 3.0e-7
+    FPMIN = 1.0e-30
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    if abs(d) < FPMIN: d = FPMIN
+    d = 1.0 / d
+    h = d
+    for m in range(1, MAXIT + 1):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        if abs(d) < FPMIN: d = FPMIN
+        c = 1.0 + aa / c
+        if abs(c) < FPMIN: c = FPMIN
+        d = 1.0 / d
+        h *= d * c
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        if abs(d) < FPMIN: d = FPMIN
+        c = 1.0 + aa / c
+        if abs(c) < FPMIN: c = FPMIN
+        d = 1.0 / d
+        del_h = d * c
+        h *= del_h
+        if abs(del_h - 1.0) < EPS:
+            break
+    return h
+
+def _ibeta(a, b, x):
+    if x <= 0.0: return 0.0
+    if x >= 1.0: return 1.0
+    bt = math.exp(math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log(1.0 - x))
+    if x < (a + 1.0) / (a + b + 2.0):
+        return bt * _betacf(a, b, x) / a
+    else:
+        return 1.0 - bt * _betacf(b, a, 1.0 - x) / b
+
+def _f_oneway(*groups):
+    groups = [np.asarray(g, dtype=float) for g in groups if len(g) > 0]
+    k = len(groups)
+    if k < 2: return 0.0, 1.0
+    n_total = sum(len(g) for g in groups)
+    grand_mean = np.mean(np.concatenate(groups))
+    ssb = sum(len(g) * (np.mean(g) - grand_mean) ** 2 for g in groups)
+    ssw = sum(np.sum((g - np.mean(g)) ** 2) for g in groups)
+    df1 = k - 1
+    df2 = n_total - k
+    msb = ssb / df1 if df1 > 0 else 0.0
+    msw = ssw / df2 if df2 > 0 else 1.0
+    f_stat = msb / msw if msw > 0 else 0.0
+    if f_stat <= 0.0:
+        p_val = 1.0
+    else:
+        x = df2 / (df2 + df1 * f_stat)
+        p_val = float(_ibeta(df2 / 2.0, df1 / 2.0, x))
+    return f_stat, p_val
+
+def _pearsonr(x, y):
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    n = len(x)
+    if n < 3: return 0.0, 1.0
+    r = float(np.corrcoef(x, y)[0, 1])
+    r = max(min(r, 1.0), -1.0)
+    if abs(r) >= 1.0: return r, 0.0
+    df = n - 2
+    t = abs(r) * math.sqrt(df / (1.0 - r * r))
+    x_t = df / (df + t * t)
+    p_val = float(_ibeta(df / 2.0, 0.5, x_t))
+    return r, p_val
+
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'data',
                          'seasonal_agriculture_performance_dataset.csv')
@@ -91,7 +172,7 @@ def seasonal_anova() -> list[dict]:
                 'Disease_Pest_Risk_pct', 'Water_Efficiency_t_per_1000m3',
                 'Rainfall_mm', 'Humidity_pct']:
         groups = [df[df['Season'] == s][col].dropna() for s in SEASONS]
-        f_stat, p_val = stats.f_oneway(*groups)
+        f_stat, p_val = _f_oneway(*groups)
         results.append({
             'metric': col,
             'f_statistic': round(float(f_stat), 4),
@@ -229,7 +310,7 @@ def risk_analytics() -> dict:
                 'Avg_Temperature_C', 'Sunlight_Hours_Day']
     correlations = {}
     for col in env_cols:
-        r, p = stats.pearsonr(df[col].dropna(), df.loc[df[col].notna(), 'Disease_Pest_Risk_pct'])
+        r, p = _pearsonr(df[col].dropna(), df.loc[df[col].notna(), 'Disease_Pest_Risk_pct'])
         correlations[col] = {'r': round(float(r), 4), 'p_value': float(p)}
 
     return {

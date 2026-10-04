@@ -6,8 +6,97 @@ Allocates land, water, fertilizer, and budget across crops to maximize expected 
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import linprog
 from . import data_service
+
+# ---------------------------------------------------------------------------
+# Linear Programming Solver (Standalone NumPy Simplex + SciPy fallback)
+# Keeps serverless deployment bundle lightweight (<150 MB) without bulky SciPy
+# ---------------------------------------------------------------------------
+
+def _simplex_linprog(c, A_ub, b_ub, bounds=None):
+    """
+    Pure NumPy implementation of the Simplex linear programming algorithm.
+    Solves: minimize c @ x  subject to  A_ub @ x <= b_ub, 0 <= x_i <= upper_bound.
+    """
+    m, n = A_ub.shape
+    A_rows = list(A_ub)
+    b_rows = list(b_ub)
+
+    if bounds:
+        for i, bnd in enumerate(bounds):
+            if bnd is not None and len(bnd) > 1 and bnd[1] is not None and np.isfinite(bnd[1]):
+                row = np.zeros(n)
+                row[i] = 1.0
+                A_rows.append(row)
+                b_rows.append(float(bnd[1]))
+
+    A_all = np.array(A_rows, dtype=float)
+    b_all = np.array(b_rows, dtype=float)
+    m_all, n_all = A_all.shape
+
+    # Standard Tableau: [A | I | b]
+    #                   [c | 0 | 0]
+    tableau = np.zeros((m_all + 1, n_all + m_all + 1), dtype=float)
+    tableau[:m_all, :n_all] = A_all
+    tableau[:m_all, n_all:n_all + m_all] = np.eye(m_all)
+    tableau[:m_all, -1] = b_all
+    tableau[-1, :n_all] = c
+
+    MAX_ITER = 2000
+    basis = list(range(n_all, n_all + m_all))
+
+    for _ in range(MAX_ITER):
+        pivot_col = int(np.argmin(tableau[-1, :-1]))
+        if tableau[-1, pivot_col] >= -1e-9:
+            break
+
+        ratios = []
+        for i in range(m_all):
+            if tableau[i, pivot_col] > 1e-9:
+                ratios.append(tableau[i, -1] / tableau[i, pivot_col])
+            else:
+                ratios.append(np.inf)
+
+        pivot_row = int(np.argmin(ratios))
+        if ratios[pivot_row] == np.inf:
+            class UnboundedResult:
+                success = False
+                message = "Problem is unbounded"
+                x = np.zeros(n)
+            return UnboundedResult()
+
+        pivot_val = tableau[pivot_row, pivot_col]
+        tableau[pivot_row, :] /= pivot_val
+        for i in range(m_all + 1):
+            if i != pivot_row:
+                tableau[i, :] -= tableau[i, pivot_col] * tableau[pivot_row, :]
+        basis[pivot_row] = pivot_col
+
+    x = np.zeros(n_all)
+    for i, b_var in enumerate(basis):
+        if b_var < n_all:
+            x[b_var] = tableau[i, -1]
+
+    class SimplexResult:
+        def __init__(self, sol, obj):
+            self.success = True
+            self.message = "Optimization terminated successfully"
+            self.x = sol
+            self.fun = obj
+
+    x_sol = x[:n]
+    return SimplexResult(x_sol, float(np.dot(c, x_sol)))
+
+
+
+def _linprog(c, A_ub, b_ub, bounds=None, method='highs'):
+    """Solve linear program via SciPy if available, else native Simplex."""
+    try:
+        from scipy.optimize import linprog
+        return linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method=method)
+    except ImportError:
+        return _simplex_linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds)
+
 
 # ---------------------------------------------------------------------------
 # Build per-crop profiles from actual data
@@ -97,7 +186,7 @@ def optimize_resources(params: dict) -> dict:
     # Bounds: each crop area >= min_area and <= total_land
     bounds = [(min_area, total_land) for _ in range(n)]
 
-    result = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method='highs')
+    result = _linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method='highs')
 
     if not result.success:
         return {

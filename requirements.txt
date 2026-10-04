@@ -1,8 +1,6 @@
 pandas
 numpy
-scipy
 flask
 flask-cors
-scikit-learn
 python-dotenv
 requests
