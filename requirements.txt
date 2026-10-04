@@ -3,3 +3,8 @@ numpy
 matplotlib
 scipy
 jupyter
+flask
+flask-cors
+scikit-learn
+python-dotenv
+requests
